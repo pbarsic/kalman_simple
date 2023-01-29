@@ -7,19 +7,19 @@ class Kalman2D:
     def __init__(
         self, initial_measurement: np.ndarray, initial_pc: np.ndarray = np.eye(4)
     ):
+        self.KG = np.eye(4)
+        self.H = np.eye(4)
+        self.C = np.eye(4)
+        self.R = np.zeros([4, 4])
+
         self.new_time = initial_measurement[0]
-        self.new_state = None
+        self.input_state = None
         logging.info(initial_pc)
         self._load_process_covariance(initial_pc)
         self._load_data(initial_measurement)
-        self.state = self.new_state
+        self.state = self.input_state
 
         logging.info(f"start time: {self.new_time}")
-
-        self.KG = np.eye(2)
-        self.H = np.eye(2)
-        self.C = np.eye(2)
-        self.R = np.zeros([2, 2])
 
     def _load_data(self, new_measurement):
         # load new X_m, t
@@ -34,7 +34,9 @@ class Kalman2D:
                 )
                 self.new_time = new_measurement[0]
                 # initialize the velocities with ones
-                self.new_state = np.concatenate([new_measurement[1:], np.ones(2)])
+                self.input_state = np.concatenate([new_measurement[1:], np.ones(2)])
+                # ignoring zk, measurement noise
+                self.measurement = np.matmul(self.C, self.input_state)
                 returnval = True
         if not returnval:
             logging.error(
@@ -44,30 +46,32 @@ class Kalman2D:
         return returnval
 
     def _predict(self):
-        # predict new X_k
         dt = self.tdelta
         self.A = np.array([[1, 0, dt, 0], [0, 1, 0, dt], [0, 0, 1, 0], [0, 0, 0, 1]])
-        # ignoring B, U, and w
+        logging.debug(f"Kalman2D._predict {self.state}")
         # predict new X_k
-        self.next_state = np.matmul(self.A, self.state)
+        self._predict_state()
         # predict new P_k
-        logging.debug(
-            f"Kalman2D._predict process_covariance {self.A.shape} {self.process_covariance.shape}"
-        )
+        self._predict_process_covariance()
+
+    def _predict_state(self):
+        # ignoring B, uk, and wk
+        self.next_state = np.matmul(self.A, self.state)
+
+    def _predict_process_covariance(self):
+        # ignoring Qk
         self.next_P = np.matmul(np.matmul(self.A, self.process_covariance), self.A.T)
 
     def _compute_gain(self):
         # compute Kalman gain
         Sk = np.matmul(np.matmul(self.H, self.next_P), self.H.T) + self.R
         self.KG = np.matmul(np.matmul(self.next_P, self.H), np.linalg.inv(Sk))
-
-    def _compute_new_state(self):
-        # compute next predicted state
-        pass
-
-    def _compute_new_process_covariance(self):
-        # compute next process covariance
-        pass
+        # logging.debug(
+        #     f"compute gain\n{self.next_P}\n{Sk}\n{np.linalg.inv(Sk)}"
+        #     f"\n{np.matmul(Sk, np.linalg.inv(Sk))}"
+        #     f"\nKG num \n{np.matmul(self.next_P, self.H)}"
+        #     f"\nKG \n{self.KG}"
+        # )
 
     def _load_process_covariance(self, pc: np.array) -> bool:
         return_value = False
@@ -81,13 +85,19 @@ class Kalman2D:
             )
         return return_value
 
+    def _compute_next_state(self):
+        pass
+
+    def _compute_next_process_covariance(self):
+        pass
+
     def update(self, new_measurement):
         returnvalue = self._load_data(new_measurement)
         if returnvalue:
             self._predict()
             self._compute_gain()
-            self._compute_new_state()
-            self._compute_new_process_covariance()
+            self._compute_next_state()
+            self._compute_next_process_covariance()
             # state should be updated now
         return returnvalue
 
