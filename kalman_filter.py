@@ -56,24 +56,31 @@ class Kalman2D:
 
     def _predict_state(self):
         # ignoring B, uk, and wk
-        self.next_state = np.matmul(self.A, self.state)
+        self.predicted_state = np.matmul(self.A, self.state)
 
     def _predict_process_covariance(self):
         # ignoring Qk
-        self.next_P = np.matmul(np.matmul(self.A, self.process_covariance), self.A.T)
+        self.predicted_process_covariance = np.matmul(
+            np.matmul(self.A, self.process_covariance), self.A.T
+        )
 
     def _compute_gain(self):
         # compute Kalman gain
-        Sk = np.matmul(np.matmul(self.H, self.next_P), self.H.T) + self.R
-        self.KG = np.matmul(np.matmul(self.next_P, self.H), np.linalg.inv(Sk))
+        Sk = (
+            np.matmul(np.matmul(self.H, self.predicted_process_covariance), self.H.T)
+            + self.R
+        )
+        self.KG = np.matmul(
+            np.matmul(self.predicted_process_covariance, self.H), np.linalg.inv(Sk)
+        )
         # logging.debug(
-        #     f"compute gain\n{self.next_P}\n{Sk}\n{np.linalg.inv(Sk)}"
+        #     f"compute gain\n{self.predicted_process_covariance}\n{Sk}\n{np.linalg.inv(Sk)}"
         #     f"\n{np.matmul(Sk, np.linalg.inv(Sk))}"
-        #     f"\nKG num \n{np.matmul(self.next_P, self.H)}"
+        #     f"\nKG num \n{np.matmul(self.predicted_process_covariance, self.H)}"
         #     f"\nKG \n{self.KG}"
         # )
 
-    def _load_process_covariance(self, pc: np.array) -> bool:
+    def _load_process_covariance(self, pc: np.ndarray) -> bool:
         return_value = False
         if pc.ndim == 2:
             if pc.shape[0] == 4 and pc.shape[1] == 4:
@@ -86,10 +93,18 @@ class Kalman2D:
         return return_value
 
     def _compute_next_state(self):
-        pass
+        innovation = self.measurement - np.matmul(self.H, self.predicted_state)
+        # logging.debug(
+        #     f"Kalman2D._compute_next_state \ninnovation\n{innovation}"
+        #     f"\nKG\n{self.KG}"
+        #     f"\n{np.matmul(self.KG,innovation)}"
+        # )
+        self.next_state = self.predicted_state + np.matmul(self.KG, innovation)
 
     def _compute_next_process_covariance(self):
-        pass
+        self.next_process_covariance = np.matmul(
+            np.eye(4) - np.matmul(self.KG, self.H), self.predicted_process_covariance
+        )
 
     def update(self, new_measurement):
         returnvalue = self._load_data(new_measurement)
@@ -98,7 +113,9 @@ class Kalman2D:
             self._compute_gain()
             self._compute_next_state()
             self._compute_next_process_covariance()
-            # state should be updated now
+            # prepare for the next iteration
+            self.state = self.predicted_state
+            self.process_covariance = self.predicted_process_covariance
         return returnvalue
 
     def get_position(self) -> np.ndarray:
