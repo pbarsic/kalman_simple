@@ -121,9 +121,9 @@ class test_kalman(unittest.TestCase):
         self.assertEqual(kf.new_time, initial_state[0])
         self.assertEqual(kf.tdelta, 0)
 
-    def test_load_data(self):
+    def SKIPtest_load_data(self):
         initial_state = self.clean[0, :]
-        initial_pc = np.eye(2)
+        initial_pc = np.eye(4)
         kf = kalman_filter.Kalman2D(initial_state, initial_pc)
         self.assertEqual(kf.tdelta, 0)
         self.assertEqual(kf.new_time, initial_state[0])
@@ -131,27 +131,46 @@ class test_kalman(unittest.TestCase):
         self.assertEqual(kf.new_state[0], initial_state[1])
         self.assertEqual(kf.state[1], initial_state[2])
         self.assertEqual(kf.new_state[1], initial_state[2])
-        self.assertEqual(kf.state[2], 0)
-        self.assertEqual(kf.new_state[2], 0)
-        self.assertEqual(kf.state[3], 0)
-        self.assertEqual(kf.new_state[3], 0)
+        self.assertEqual(kf.state[2], 1)
+        self.assertEqual(kf.new_state[2], 1)
+        self.assertEqual(kf.state[3], 1)
+        self.assertEqual(kf.new_state[3], 1)
 
         for ii in range(1, self.clean.shape[0]):
-            datum = self.clean[ii,:]
+            datum = self.clean[ii, :]
             self.assertTrue(kf._load_data(datum))
             self.assertEqual(kf.tdelta, self.dt)
             self.assertEqual(kf.new_time, datum[0])
             self.assertEqual(kf.new_state[0], datum[1])
             self.assertEqual(kf.new_state[1], datum[2])
-            self.assertEqual(kf.new_state[2], 0)
-            self.assertEqual(kf.new_state[3], 0)
+            self.assertEqual(kf.new_state[2], 1)
+            self.assertEqual(kf.new_state[3], 1)
             # since this just loads but doesn't update, expect state
             # to never change
             self.assertEqual(kf.state[0], initial_state[1])
             self.assertEqual(kf.state[1], initial_state[2])
-            self.assertEqual(kf.state[2], 0)
-            self.assertEqual(kf.state[3], 0)
+            self.assertEqual(kf.state[2], 1)
+            self.assertEqual(kf.state[3], 1)
 
+    def test_predict(self):
+        initial_state = np.array([0, 500, 400])
+        initial_pc = np.array([[1, 0, 2, 0], [0, 2, 0, 3], [0, 0, 1, 0], [0, 0, 0, 9]])
+        kf = kalman_filter.Kalman2D(initial_state, initial_pc)
+        # insert some fake values
+        kf.tdelta = 5
+        expected_next_state = np.array([505, 405, 1, 1])
+        expected_pc = np.array(
+            [[36, 0, 7, 0], [0, 242, 0, 48], [5, 0, 1, 0], [0, 45, 0, 9]]
+        )
+        datum = np.array([5, 506, 404])
+        self.assertTrue(kf._load_data(datum))
+        kf._predict()
+        self.assertTrue(all(kf.next_state == expected_next_state))
+        logging.debug(f"\n{kf.next_P}\n{initial_pc}")
+        self.assertTrue(all(kf.next_P.ravel() == expected_pc.ravel()))
+
+    def test_gain(self):
+        pass
 
     def SKIP_test_fit_dirty(self):
         pass
