@@ -7,20 +7,16 @@ class Kalman2D:
     def __init__(
         self,
         estimated_measurement_error: np.ndarray = np.ones(4),
+        estimated_process_covariance: np.ndarray = np.eye(4)
     ):
         self.KG = np.eye(4)
         self.H = np.eye(4)
         self.C = np.eye(4)
         self.num_points = 0
         self._load_measurement_error(estimated_measurement_error)
-
-        # self.time = initial_measurement[0]
-        # self.state = np.concatenate([initial_measurement[1:], np.zeros(2)])
         self.state = np.zeros(4)
         self.time = 0
-        self._load_process_covariance(np.eye(4))
-        # self._load_data(initial_measurement)
-        # self.state = self.input_state
+        self._load_process_covariance(estimated_process_covariance)
 
     # TODO take initial measurement out of init
 
@@ -30,7 +26,7 @@ class Kalman2D:
         returnval = False
         if new_measurement.ndim == 1:
             if new_measurement.shape[0] == 3:
-                # it comes in as [t, x, y]
+                # required data of form [t, x, y]
                 if self.num_points > 0:
                     self.tdelta = new_measurement[0] - self.time
                 else:
