@@ -5,17 +5,18 @@ import numpy as np
 
 class Kalman2D:
     def __init__(
-        self, initial_measurement: np.ndarray, initial_pc: np.ndarray = np.eye(4)
+        self,
+        initial_measurement: np.ndarray,
+        estimated_measurement_error: np.ndarray = np.eye(4),
     ):
         self.KG = np.eye(4)
         self.H = np.eye(4)
         self.C = np.eye(4)
-        self.R = np.zeros([4, 4])
+        self.R = estimated_measurement_error
 
         self.new_time = initial_measurement[0]
-        self.input_state = None
-        logging.info(initial_pc)
-        self._load_process_covariance(initial_pc)
+        self.state = np.concatenate([initial_measurement[1:], np.zeros(2)])
+        self._load_process_covariance(np.eye(4))
         self._load_data(initial_measurement)
         self.state = self.input_state
 
@@ -32,9 +33,15 @@ class Kalman2D:
                 logging.debug(
                     f"Kalman2d {self.tdelta} {self.new_time} {new_measurement[0]}"
                 )
-                self.new_time = new_measurement[0]
                 # initialize the velocities with ones
-                self.input_state = np.concatenate([new_measurement[1:], np.ones(2)])
+                if abs(new_measurement[0] - self.new_time) < 1e-6:
+                    est_velocity = np.zeros(2)
+                else:
+                    est_velocity = (new_measurement[1:] - self.state[:2]) / (
+                        new_measurement[0] - self.new_time
+                    )
+                self.new_time = new_measurement[0]
+                self.input_state = np.concatenate([new_measurement[1:], est_velocity])
                 # ignoring zk, measurement noise
                 self.measurement = np.matmul(self.C, self.input_state)
                 returnval = True
@@ -48,7 +55,7 @@ class Kalman2D:
     def _predict(self):
         dt = self.tdelta
         self.A = np.array([[1, 0, dt, 0], [0, 1, 0, dt], [0, 0, 1, 0], [0, 0, 0, 1]])
-        logging.debug(f"Kalman2D._predict {self.state}")
+        # logging.debug(f"Kalman2D._predict {self.state}")
         # predict new X_k
         self._predict_state()
         # predict new P_k
@@ -60,6 +67,11 @@ class Kalman2D:
 
     def _predict_process_covariance(self):
         # ignoring Qk
+        logging.debug(
+            "Kalman2D._predict_process_covariance"
+            f"\n{self.process_covariance}\n{self.A}\n{self.A.T}"
+            f"\n{np.matmul(self.A, self.process_covariance)}"
+        )
         self.predicted_process_covariance = np.matmul(
             np.matmul(self.A, self.process_covariance), self.A.T
         )
@@ -69,6 +81,9 @@ class Kalman2D:
         Sk = (
             np.matmul(np.matmul(self.H, self.predicted_process_covariance), self.H.T)
             + self.R
+        )
+        logging.debug(
+            f"Kalman2D._compute_gain {self.predicted_process_covariance} {Sk}"
         )
         self.KG = np.matmul(
             np.matmul(self.predicted_process_covariance, self.H), np.linalg.inv(Sk)
@@ -94,12 +109,13 @@ class Kalman2D:
 
     def _compute_next_state(self):
         innovation = self.measurement - np.matmul(self.H, self.predicted_state)
-        # logging.debug(
-        #     f"Kalman2D._compute_next_state \ninnovation\n{innovation}"
-        #     f"\nKG\n{self.KG}"
-        #     f"\n{np.matmul(self.KG,innovation)}"
-        # )
         self.next_state = self.predicted_state + np.matmul(self.KG, innovation)
+        logging.debug(
+            f"Kalman2D._compute_next_state \ninnovation\n{innovation}"
+            f"\nKG\n{self.KG}"
+            f"\n{np.matmul(self.KG,innovation)}"
+            f"\nnext_state {self.next_state}"
+        )
 
     def _compute_next_process_covariance(self):
         self.next_process_covariance = np.matmul(
@@ -114,8 +130,8 @@ class Kalman2D:
             self._compute_next_state()
             self._compute_next_process_covariance()
             # prepare for the next iteration
-            self.state = self.predicted_state
-            self.process_covariance = self.predicted_process_covariance
+            self.state = self.next_state
+            self.process_covariance = self.next_process_covariance
         return returnvalue
 
     def get_position(self) -> np.ndarray:
