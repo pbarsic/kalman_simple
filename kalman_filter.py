@@ -26,25 +26,25 @@ class Kalman2D:
         returnval = False
         if new_measurement.ndim == 1:
             if new_measurement.shape[0] == 3:
-                # required data of form [t, x, y]
+                # required data of form [x, y, t]
                 if self.num_points > 0:
-                    self.tdelta = new_measurement[0] - self.time
+                    self.tdelta = new_measurement[2] - self.time
                 else:
                     self.tdelta = 0
                     # initialize the state with the first position
-                    self.state[:2] = new_measurement[1:]
+                    self.state[:2] = new_measurement[:2]
                 # logging.debug(
-                #     f"Kalman2d {self.tdelta} {self.time} {new_measurement[0]}"
+                #     f"Kalman2d {self.tdelta} {self.time} {new_measurement[2]}"
                 # )
                 # initialize the velocities with ones
                 if abs(self.tdelta) < 1e-6:
                     est_velocity = np.zeros(2)
                 else:
-                    est_velocity = (new_measurement[1:] - self.state[:2]) / (
-                        new_measurement[0] - self.time
+                    est_velocity = (new_measurement[:2] - self.state[:2]) / (
+                        new_measurement[2] - self.time
                     )
-                self.time = new_measurement[0]
-                self.input_state = np.concatenate([new_measurement[1:], est_velocity])
+                self.time = new_measurement[2]
+                self.input_state = np.concatenate([new_measurement[:2], est_velocity])
                 self.num_points += 1
                 # ignoring zk, measurement noise
                 self.measurement = np.matmul(self.C, self.input_state)

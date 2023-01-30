@@ -101,11 +101,11 @@ class test_kalman(unittest.TestCase):
         )
 
         self.clean = (
-            np.concatenate([self.tvals, self.xvals, self.yvals]).reshape(3, -1).T
+            np.concatenate([self.xvals, self.yvals, self.tvals]).reshape(3, -1).T
         )
         self.dirty = (
             self.clean
-            + np.concatenate([self.tdirt, self.xdirt, self.ydirt]).reshape(3, -1).T
+            + np.concatenate([self.xdirt, self.ydirt, self.tdirt]).reshape(3, -1).T
         )
 
         return super().setUp()
@@ -141,30 +141,30 @@ class test_kalman(unittest.TestCase):
 
         kf._load_data(initial_datum)
         self.assertEqual(kf.tdelta, 0)
-        self.assertEqual(kf.time, initial_datum[0])
-        self.assertEqual(kf.input_state[0], initial_datum[1])
-        self.assertEqual(kf.input_state[1], initial_datum[2])
+        self.assertEqual(kf.time, initial_datum[2])
+        self.assertEqual(kf.input_state[0], initial_datum[0])
+        self.assertEqual(kf.input_state[1], initial_datum[1])
         self.assertEqual(kf.input_state[2], 0)
         self.assertEqual(kf.input_state[3], 0)
         self.assertEqual(kf.num_points, 1)
         # since this test just loads but doesn't update, expect state to stay at the first value
-        self.assertEqual(kf.state[0], initial_datum[1])
-        self.assertEqual(kf.state[1], initial_datum[2])
+        self.assertEqual(kf.state[0], initial_datum[0])
+        self.assertEqual(kf.state[1], initial_datum[1])
         self.assertEqual(kf.state[2], 0)
         self.assertEqual(kf.state[3], 0)
 
         datum = self.clean[1, :]
         self.assertTrue(kf._load_data(datum))
         self.assertEqual(kf.tdelta, self.dt)
-        self.assertEqual(kf.time, datum[0])
-        self.assertEqual(kf.input_state[0], datum[1])
-        self.assertEqual(kf.input_state[1], datum[2])
+        self.assertEqual(kf.time, datum[2])
+        self.assertEqual(kf.input_state[0], datum[0])
+        self.assertEqual(kf.input_state[1], datum[1])
         self.assertAlmostEqual(kf.input_state[2], self.xs, 5)
         self.assertAlmostEqual(kf.input_state[3], self.ys, 5)
         self.assertEqual(kf.num_points, 2)
         # since this test just loads but doesn't update, expect state to stay at the first value
-        self.assertEqual(kf.state[0], initial_datum[1])
-        self.assertEqual(kf.state[1], initial_datum[2])
+        self.assertEqual(kf.state[0], initial_datum[0])
+        self.assertEqual(kf.state[1], initial_datum[1])
         self.assertEqual(kf.state[2], 0)
         self.assertEqual(kf.state[3], 0)
 
@@ -173,7 +173,7 @@ class test_kalman(unittest.TestCase):
         estimated_measurement_error = np.ones(4) * 1e-6
         kf = kalman_filter.Kalman2D(estimated_measurement_error)
         # insert some fake values
-        initial_datum = np.array([0, 500, 400])
+        initial_datum = np.array([500, 400, 0])
         kf._load_data(initial_datum)
         kf.tdelta = 5
         kf.process_covariance = np.array(
@@ -184,7 +184,7 @@ class test_kalman(unittest.TestCase):
         expected_pc = np.array(
             [[36, 0, 7, 0], [0, 242, 0, 48], [5, 0, 1, 0], [0, 45, 0, 9]]
         )
-        datum = np.array([5, 506, 404])
+        datum = np.array([506, 404, 5])
         self.assertTrue(kf._load_data(datum))
         kf._predict()
         # logging.debug(f"state\n{kf.predicted_state}\n{expected_predicted_state}")
@@ -207,7 +207,7 @@ class test_kalman(unittest.TestCase):
         )
 
         expected_gain = np.eye(4)
-        datum = np.array([5, 506, 404])
+        datum = np.array([506, 404, 5])
         self.assertTrue(kf._load_data(datum))
         kf._predict()
         kf._compute_gain()
@@ -280,7 +280,7 @@ class test_kalman(unittest.TestCase):
         self.assertAlmostEqual(desired_state[3], final_value[1], 1)
 
         final_time = kf.get_time()
-        self.assertEqual(final_time, self.dirty[-1, 0])
+        self.assertEqual(final_time, self.dirty[-1, 2])
 
 
 if __name__ == "__main__":
