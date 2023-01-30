@@ -125,7 +125,7 @@ class test_kalman(unittest.TestCase):
             ]
         )
         kf = kalman_filter.Kalman2D(initial_state, estimated_measurement_error)
-        self.assertEqual(kf.new_time, initial_state[0])
+        self.assertEqual(kf.time, initial_state[0])
         self.assertEqual(kf.tdelta, 0)
 
     def test_load_data(self):
@@ -134,7 +134,7 @@ class test_kalman(unittest.TestCase):
         estimated_measurement_error = np.ones(4)
         kf = kalman_filter.Kalman2D(initial_state, estimated_measurement_error)
         self.assertEqual(kf.tdelta, 0)
-        self.assertEqual(kf.new_time, initial_state[0])
+        self.assertEqual(kf.time, initial_state[0])
         self.assertEqual(kf.state[0], initial_state[1])
         self.assertEqual(kf.input_state[0], initial_state[1])
         self.assertEqual(kf.state[1], initial_state[2])
@@ -147,7 +147,7 @@ class test_kalman(unittest.TestCase):
         datum = self.clean[1, :]
         self.assertTrue(kf._load_data(datum))
         self.assertEqual(kf.tdelta, self.dt)
-        self.assertEqual(kf.new_time, datum[0])
+        self.assertEqual(kf.time, datum[0])
         self.assertEqual(kf.input_state[0], datum[1])
         self.assertEqual(kf.input_state[1], datum[2])
         self.assertAlmostEqual(kf.input_state[2], self.xs, 5)
@@ -265,6 +265,19 @@ class test_kalman(unittest.TestCase):
             logging.info(f"DD {datum} {kf.state} {kf.tdelta} {desired_state}")
         for calc, expect in zip(kf.state, desired_state):
             self.assertAlmostEqual(calc, expect, 0)
+
+        final_value = kf.get_position()
+        self.assertTupleEqual(final_value.shape, (2,))
+        self.assertAlmostEqual(desired_state[0], final_value[0], 0)
+        self.assertAlmostEqual(desired_state[1], final_value[1], 0)
+
+        final_value = kf.get_velocity()
+        self.assertTupleEqual(final_value.shape, (2,))
+        self.assertAlmostEqual(desired_state[2], final_value[0], 1)
+        self.assertAlmostEqual(desired_state[3], final_value[1], 1)
+
+        final_time = kf.get_time()
+        self.assertEqual(final_time, self.dirty[-1, 0])
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ class Kalman2D:
         self.C = np.eye(4)
         self._load_measurement_error(estimated_measurement_error)
 
-        self.new_time = initial_measurement[0]
+        self.time = initial_measurement[0]
         self.state = np.concatenate([initial_measurement[1:], np.zeros(2)])
         self._load_process_covariance(np.eye(4))
         self._load_data(initial_measurement)
@@ -27,18 +27,18 @@ class Kalman2D:
         if new_measurement.ndim == 1:
             if new_measurement.shape[0] == 3:
                 # it comes in as [t, x, y]
-                self.tdelta = new_measurement[0] - self.new_time
+                self.tdelta = new_measurement[0] - self.time
                 # logging.debug(
-                #     f"Kalman2d {self.tdelta} {self.new_time} {new_measurement[0]}"
+                #     f"Kalman2d {self.tdelta} {self.time} {new_measurement[0]}"
                 # )
                 # initialize the velocities with ones
-                if abs(new_measurement[0] - self.new_time) < 1e-6:
+                if abs(new_measurement[0] - self.time) < 1e-6:
                     est_velocity = np.zeros(2)
                 else:
                     est_velocity = (new_measurement[1:] - self.state[:2]) / (
-                        new_measurement[0] - self.new_time
+                        new_measurement[0] - self.time
                     )
-                self.new_time = new_measurement[0]
+                self.time = new_measurement[0]
                 self.input_state = np.concatenate([new_measurement[1:], est_velocity])
                 # ignoring zk, measurement noise
                 self.measurement = np.matmul(self.C, self.input_state)
@@ -147,12 +147,11 @@ class Kalman2D:
             self.process_covariance = self.next_process_covariance
         return returnvalue
 
+    def get_time(self) -> np.ndarray:
+        return self.time
+
     def get_position(self) -> np.ndarray:
         return self.state[:2]
 
     def get_velocity(self) -> np.ndarray:
         return self.state[2:]
-
-
-if __name__ == "__main__":
-    pass
