@@ -15,7 +15,7 @@ def ft(b, m, tvals):
 class test_kalman(unittest.TestCase):
     def setUp(self) -> None:
         self.dt = 0.5
-        self.tvals = np.arange(0, 10, self.dt)
+        self.tvals = np.arange(1, 11, self.dt)
         self.x0 = 200
         self.xs = -0.8
         self.y0 = 400
@@ -115,7 +115,6 @@ class test_kalman(unittest.TestCase):
 
     def test_init(self):
         logging.info("test_init")
-        initial_state = np.array([9, 50, 40])
         estimated_measurement_error = np.array(
             [
                 5,
@@ -124,25 +123,35 @@ class test_kalman(unittest.TestCase):
                 0,
             ]
         )
-        kf = kalman_filter.Kalman2D(initial_state, estimated_measurement_error)
-        self.assertEqual(kf.time, initial_state[0])
-        self.assertEqual(kf.tdelta, 0)
+        kf = kalman_filter.Kalman2D(estimated_measurement_error)
+        self.assertEqual(kf.get_time(), 0)
+        self.assertTupleEqual(tuple(kf.get_position().tolist()), (0, 0))
+        self.assertTupleEqual(tuple(kf.get_velocity().tolist()), (0, 0))
+        self.assertEqual(kf.num_points, 0)
 
     def test_load_data(self):
         logging.info("test_load_data")
-        initial_state = self.clean[0, :]
-        estimated_measurement_error = np.ones(4)
-        kf = kalman_filter.Kalman2D(initial_state, estimated_measurement_error)
-        self.assertEqual(kf.tdelta, 0)
-        self.assertEqual(kf.time, initial_state[0])
-        self.assertEqual(kf.state[0], initial_state[1])
-        self.assertEqual(kf.input_state[0], initial_state[1])
-        self.assertEqual(kf.state[1], initial_state[2])
-        self.assertEqual(kf.input_state[1], initial_state[2])
+        initial_datum = self.clean[0, :]
+        kf = kalman_filter.Kalman2D()
+
+        self.assertEqual(kf.state[0], 0)
+        self.assertEqual(kf.state[1], 0)
         self.assertEqual(kf.state[2], 0)
-        self.assertEqual(kf.input_state[2], 0)
         self.assertEqual(kf.state[3], 0)
+
+        kf._load_data(initial_datum)
+        self.assertEqual(kf.tdelta, 0)
+        self.assertEqual(kf.time, initial_datum[0])
+        self.assertEqual(kf.input_state[0], initial_datum[1])
+        self.assertEqual(kf.input_state[1], initial_datum[2])
+        self.assertEqual(kf.input_state[2], 0)
         self.assertEqual(kf.input_state[3], 0)
+        self.assertEqual(kf.num_points, 1)
+        # since this test just loads but doesn't update, expect state to stay at the first value
+        self.assertEqual(kf.state[0], initial_datum[1])
+        self.assertEqual(kf.state[1], initial_datum[2])
+        self.assertEqual(kf.state[2], 0)
+        self.assertEqual(kf.state[3], 0)
 
         datum = self.clean[1, :]
         self.assertTrue(kf._load_data(datum))
@@ -152,24 +161,25 @@ class test_kalman(unittest.TestCase):
         self.assertEqual(kf.input_state[1], datum[2])
         self.assertAlmostEqual(kf.input_state[2], self.xs, 5)
         self.assertAlmostEqual(kf.input_state[3], self.ys, 5)
-        # since this just loads but doesn't update, expect state
-        # to never change
-        self.assertEqual(kf.state[0], initial_state[1])
-        self.assertEqual(kf.state[1], initial_state[2])
+        self.assertEqual(kf.num_points, 2)
+        # since this test just loads but doesn't update, expect state to stay at the first value
+        self.assertEqual(kf.state[0], initial_datum[1])
+        self.assertEqual(kf.state[1], initial_datum[2])
         self.assertEqual(kf.state[2], 0)
         self.assertEqual(kf.state[3], 0)
 
     def test_predict(self):
         logging.info("test_predict")
-        initial_state = np.array([0, 500, 400])
         estimated_measurement_error = np.ones(4) * 1e-6
-        kf = kalman_filter.Kalman2D(initial_state, estimated_measurement_error)
+        kf = kalman_filter.Kalman2D(estimated_measurement_error)
         # insert some fake values
+        initial_datum = np.array([0, 500, 400])
+        kf._load_data(initial_datum)
         kf.tdelta = 5
         kf.process_covariance = np.array(
             [[1, 0, 2, 0], [0, 2, 0, 3], [0, 0, 1, 0], [0, 0, 0, 9]]
         )
-        # velocity initialized to 0, so expect saem as initial state
+        # velocity initialized to 0, so expect same as initial state
         expected_predicted_state = np.array([500, 400, 0, 0])
         expected_pc = np.array(
             [[36, 0, 7, 0], [0, 242, 0, 48], [5, 0, 1, 0], [0, 45, 0, 9]]
@@ -188,9 +198,8 @@ class test_kalman(unittest.TestCase):
 
     def test_gain(self):
         logging.info("test_gain")
-        initial_state = np.array([0, 500, 400])
         estimated_measurement_error = np.ones(4) * 1e-8
-        kf = kalman_filter.Kalman2D(initial_state, estimated_measurement_error)
+        kf = kalman_filter.Kalman2D(estimated_measurement_error)
         # insert some fake values
         kf.tdelta = 5
         kf.process_covariance = np.array(
@@ -208,9 +217,7 @@ class test_kalman(unittest.TestCase):
 
     def test_compute_next_state(self):
         logging.info("test_compute_next_state")
-        initial_state = np.array([0, 500, 400])
-        estimated_measurement_error = np.ones(4)
-        kf = kalman_filter.Kalman2D(initial_state, estimated_measurement_error)
+        kf = kalman_filter.Kalman2D()
         # fill them with fake values
         kf.measurement = np.array([1, 2, 3, 4])
         kf.predicted_state = np.array([2, -2, -2, -2])
@@ -221,9 +228,7 @@ class test_kalman(unittest.TestCase):
 
     def test_compute_next_process_covariance(self):
         logging.info("test_compute_next_process_covariance")
-        initial_state = np.array([0, 500, 400])
-        estimated_measurement_error = np.ones(4)
-        kf = kalman_filter.Kalman2D(initial_state, estimated_measurement_error)
+        kf = kalman_filter.Kalman2D()
         # fill them with fake values
         kf.predicted_process_covariance = np.array(
             [[10, 11, 12, 13], [20, 21, 22, 23], [30, 31, 32, 33], [40, 41, 42, 43]]
@@ -242,9 +247,8 @@ class test_kalman(unittest.TestCase):
 
     def test_fit_clean(self):
         logging.info("test_fit_clean")
-        initial_state = self.clean[0, :]
         estimated_measurement_error = np.ones(4) * 1e-3
-        kf = kalman_filter.Kalman2D(initial_state, estimated_measurement_error)
+        kf = kalman_filter.Kalman2D(estimated_measurement_error)
         desired_state = np.array([self.xvals[-1], self.yvals[-1], self.xs, self.ys])
         for ii in range(self.clean.shape[0]):
             datum = self.clean[ii, :]
@@ -255,9 +259,8 @@ class test_kalman(unittest.TestCase):
 
     def test_fit_dirty(self):
         logging.info("test_fit_dirty")
-        initial_state = self.dirty[0, :]
         estimated_measurement_error = np.ones(4) * 0.1
-        kf = kalman_filter.Kalman2D(initial_state, estimated_measurement_error)
+        kf = kalman_filter.Kalman2D(estimated_measurement_error)
         desired_state = np.array([self.xvals[-1], self.yvals[-1], self.xs, self.ys])
         for ii in range(self.dirty.shape[0]):
             datum = self.dirty[ii, :]

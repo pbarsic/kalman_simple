@@ -6,19 +6,23 @@ import numpy as np
 class Kalman2D:
     def __init__(
         self,
-        initial_measurement: np.ndarray,
         estimated_measurement_error: np.ndarray = np.ones(4),
     ):
         self.KG = np.eye(4)
         self.H = np.eye(4)
         self.C = np.eye(4)
+        self.num_points = 0
         self._load_measurement_error(estimated_measurement_error)
 
-        self.time = initial_measurement[0]
-        self.state = np.concatenate([initial_measurement[1:], np.zeros(2)])
+        # self.time = initial_measurement[0]
+        # self.state = np.concatenate([initial_measurement[1:], np.zeros(2)])
+        self.state = np.zeros(4)
+        self.time = 0
         self._load_process_covariance(np.eye(4))
-        self._load_data(initial_measurement)
-        self.state = self.input_state
+        # self._load_data(initial_measurement)
+        # self.state = self.input_state
+
+    # TODO take initial measurement out of init
 
     def _load_data(self, new_measurement):
         # load new X_m, t
@@ -27,12 +31,17 @@ class Kalman2D:
         if new_measurement.ndim == 1:
             if new_measurement.shape[0] == 3:
                 # it comes in as [t, x, y]
-                self.tdelta = new_measurement[0] - self.time
+                if self.num_points > 0:
+                    self.tdelta = new_measurement[0] - self.time
+                else:
+                    self.tdelta = 0
+                    # initialize the state with the first position
+                    self.state[:2] = new_measurement[1:]
                 # logging.debug(
                 #     f"Kalman2d {self.tdelta} {self.time} {new_measurement[0]}"
                 # )
                 # initialize the velocities with ones
-                if abs(new_measurement[0] - self.time) < 1e-6:
+                if abs(self.tdelta) < 1e-6:
                     est_velocity = np.zeros(2)
                 else:
                     est_velocity = (new_measurement[1:] - self.state[:2]) / (
@@ -40,6 +49,7 @@ class Kalman2D:
                     )
                 self.time = new_measurement[0]
                 self.input_state = np.concatenate([new_measurement[1:], est_velocity])
+                self.num_points += 1
                 # ignoring zk, measurement noise
                 self.measurement = np.matmul(self.C, self.input_state)
                 returnval = True
@@ -137,7 +147,7 @@ class Kalman2D:
 
     def update(self, new_measurement):
         returnvalue = self._load_data(new_measurement)
-        if returnvalue:
+        if returnvalue and self.num_points > 1:
             self._predict()
             self._compute_gain()
             self._compute_next_state()
@@ -145,10 +155,11 @@ class Kalman2D:
             # prepare for the next iteration
             self.state = self.next_state
             self.process_covariance = self.next_process_covariance
+
         return returnvalue
 
     def get_time(self) -> np.ndarray:
-        return self.time
+        return np.array([self.time])
 
     def get_position(self) -> np.ndarray:
         return self.state[:2]
